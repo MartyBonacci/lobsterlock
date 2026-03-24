@@ -6,8 +6,9 @@ import type { LobsterLockConfig, Verdict } from '../types.js';
 /**
  * Handles KILL verdict execution:
  * 1. Runs `openclaw security audit --fix`
- * 2. Sends Discord alert
- * 3. Pauses the trigger manager
+ * 2. Stops the OpenClaw service via `systemctl stop openclaw`
+ * 3. Sends Discord alert
+ * 4. Pauses the trigger manager
  */
 export class KillHandler {
   private config: LobsterLockConfig;
@@ -42,10 +43,20 @@ export class KillHandler {
       console.error('[KILL] Fix command failed:', err);
     }
 
+    // Stop the OpenClaw service
+    console.log('[KILL] Stopping OpenClaw service...');
+    try {
+      const stopResult = await this.execFn('systemctl', ['stop', this.config.openclaw_service]);
+      console.log(`[KILL] systemctl stop exited with code ${stopResult.exitCode}`);
+    } catch (err) {
+      console.error('[KILL] Failed to stop OpenClaw service:', err);
+    }
+
     // Notify via Discord
     await this.dispatcher.sendDegradedAlert(
       `**KILL verdict executed**\nReason: ${verdict.reason}\n\n` +
       `\`openclaw security audit --fix\` has been run.\n` +
+      `OpenClaw service has been stopped via \`systemctl stop\`.\n` +
       `Monitoring is **paused**. Run \`lobsterlock ack\` to resume.`,
     );
 

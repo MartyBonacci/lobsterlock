@@ -104,7 +104,7 @@ Claude reasons over this and produces one of:
 - `CLEAR` — nothing notable, reset buffer
 - `WATCH [reason]` — something worth tracking, log it, keep buffer
 - `ALERT [severity] [reason]` — notify the human
-- `KILL [reason]` — run `openclaw security audit --fix`, alert human, await confirmation before full shutdown
+- `KILL [reason]` — run `openclaw security audit --fix`, stop OpenClaw service via `systemctl stop`, alert human, await confirmation via `lobsterlock ack`
 
 **Two operating modes:**
 
@@ -171,7 +171,7 @@ A WATCH verdict does not reset the signal buffer — it persists context across 
 WATCH → WATCH → WATCH → [next trigger floors at ALERT LOW]
 WATCH → WATCH → CLEAR → buffer resets, escalation counter resets
 ALERT → human acknowledges (via `lobsterlock ack`) → buffer resets, escalation counter resets
-KILL → `openclaw security audit --fix` runs → alert sent → human must run `lobsterlock ack` to confirm and restart
+KILL → `openclaw security audit --fix` runs → `systemctl stop openclaw` → alert sent → human must run `lobsterlock ack` to resume
 ```
 
 **Acknowledgment:** Human acknowledgment is via `lobsterlock ack` CLI command. Until acknowledged, ALERT-level verdicts remain in "pending" state in the audit log. KILL verdicts run `--fix` immediately but await `lobsterlock ack` before LobsterLock resumes normal monitoring.
@@ -205,7 +205,6 @@ KILL → `openclaw security audit --fix` runs → alert sent → human must run 
   "openclaw_service": "openclaw",
   "openclaw_cli": "/opt/openclaw-cli.sh",
   "skills_watch": [
-    "/home/openclaw/.openclaw/skills",
     "/home/openclaw/.openclaw/workspace/skills"
   ],
   "alert_channel": "discord",

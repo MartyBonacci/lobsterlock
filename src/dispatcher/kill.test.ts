@@ -21,13 +21,11 @@ function makeVerdict(overrides: Partial<Verdict> = {}): Verdict {
 }
 
 describe('KillHandler', () => {
-  it('runs fix command and pauses trigger manager', async () => {
-    let fixCalled = false;
-    let fixArgs: string[] = [];
+  it('runs fix command, stops service, and pauses trigger manager', async () => {
+    const calls: { cmd: string; args: string[] }[] = [];
     const mockExec = async (cmd: string, args: string[]): Promise<ExecResult> => {
-      fixCalled = true;
-      fixArgs = args;
-      return { stdout: 'fixed', stderr: '', exitCode: 0 };
+      calls.push({ cmd, args });
+      return { stdout: 'ok', stderr: '', exitCode: 0 };
     };
 
     let alertSent = false;
@@ -47,11 +45,15 @@ describe('KillHandler', () => {
     const handler = new KillHandler(DEFAULT_CONFIG, mockDispatcher, mockTriggerManager, mockExec);
     await handler.execute(makeVerdict());
 
-    assert.ok(fixCalled, 'fix command should be called');
-    assert.deepEqual(fixArgs, ['security', 'audit', '--fix']);
+    // Verify both commands called in order
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0].args, ['security', 'audit', '--fix']);
+    assert.equal(calls[1].cmd, 'systemctl');
+    assert.deepEqual(calls[1].args, ['stop', DEFAULT_CONFIG.openclaw_service]);
+
     assert.ok(alertSent, 'Discord alert should be sent');
     assert.ok(alertMessage.includes('KILL verdict executed'));
-    assert.ok(alertMessage.includes('lobsterlock ack'));
+    assert.ok(alertMessage.includes('systemctl stop'));
     assert.ok(paused, 'trigger manager should be paused');
   });
 

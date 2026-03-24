@@ -60,7 +60,6 @@ export const DEFAULT_CONFIG: LobsterLockConfig = {
   openclaw_service: 'openclaw',
   openclaw_cli: '/opt/openclaw-cli.sh',
   skills_watch: [
-    '/home/openclaw/.openclaw/skills',
     '/home/openclaw/.openclaw/workspace/skills',
   ],
   alert_channel: 'discord',

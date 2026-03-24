@@ -6,16 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 LobsterLock is a semantic security orchestrator for OpenClaw deployments. It uses OpenClaw's own CLI tools (`security audit --json`, `skills list --json`) as primary data sources and applies Claude-powered semantic reasoning to detect novel threats that pattern matchers miss. Third-party tools (SecureClaw, AgentGuard, ClawSec, SkillVet) are optional v0.2+ enhancements, not MVP dependencies.
 
-**Status:** Pre-implementation (specification complete, no source code yet). See SPEC.md for the full technical specification and lobsterlock-handoff.md for field research context.
+**Status:** MVP v0.1 implemented (95 tests passing). See SPEC.md for the full technical specification.
 
-## Planned Tech Stack
+## Tech Stack
 
-- **Runtime:** Node.js 24
-- **Language:** TypeScript
+- **Runtime:** Node.js 22+ (targets Node.js 24)
+- **Language:** TypeScript (strict, ESM)
 - **Filesystem watch:** chokidar
 - **Database:** SQLite via better-sqlite3
-- **Reasoning:** Claude interface TBD (SDK, subprocess, or raw API — see SPEC.md open question 6)
-- **Alerts:** Discord (via OpenClaw Gateway API)
+- **Reasoning:** Anthropic Messages API via `@anthropic-ai/sdk`
+- **Alerts:** Discord via `discord.js`
+- **CLI:** commander
 - **Target platform:** DigitalOcean marketplace image, Ubuntu 24, OpenClaw 3.12, systemd
 - **Memory budget:** 2GB shared — OpenClaw gets 1280MB heap, LobsterLock gets 256MB heap
 
@@ -37,20 +38,18 @@ LobsterLock is a semantic security orchestrator for OpenClaw deployments. It use
 - **Prompt injection defense** — All data in reasoning prompt uses XML delimiters, system prompt warns about adversarial content, verdict parsed with strict regex.
 - **Full auditability** — Every reasoning cycle logged to SQLite with complete context. Traces must be human-readable.
 
-## Planned Build Order
+## Build Commands
 
-1. npm + TypeScript scaffold
-2. `src/collector/audit.ts` — security audit JSON ingestion + diff
-3. `src/collector/skills.ts` — skills list JSON snapshot + diff
-4. `src/collector/log-tail.ts` — journalctl log ingestion
-5. `src/collector/fs-watcher.ts` — skills directory watcher
-6. Trigger + signal buffer system (with debounce)
-7. `src/reasoning/engine.ts` — Claude reasoning cycle (last, since it depends on all collectors)
-8. `src/dispatcher/alert.ts` + `src/dispatcher/kill.ts`
-9. CLI commands: `lobsterlock start`, `status`, `last`, `check`, `ack`
-10. SQLite audit log + process lifecycle (PID lock, graceful shutdown, state restore)
+```bash
+npm install          # install dependencies
+npm run build        # compile TypeScript to dist/
+npm test             # run all 95 tests (no external services needed)
+npm run dev          # watch mode (tsc --watch)
+npm start            # run with 256MB heap limit
+npm link             # make `lobsterlock` CLI globally available
+```
 
-## Planned File Structure
+## File Structure
 
 ```
 src/
@@ -84,8 +83,24 @@ src/
 
 **Threshold triggers (v0.2):** repeated unknown IP connections (2 in 5 min).
 
-## Blocking Open Questions
+## Development Environment
 
-Before implementation of certain components, these must be resolved (see SPEC.md for full list):
-- **Discord API endpoint** (blocks alert dispatcher): Gateway WebSocket, `openclaw message send`, or Discord.js?
-- **Claude interface** (blocks reasoning engine): SDK, subprocess, or raw Anthropic API?
+- OpenClaw is running on this same droplet as a systemd service
+- Logs: `journalctl -u openclaw`
+- Config: `/home/openclaw/.openclaw/openclaw.json`
+- Gateway: localhost:18789
+- Skills directory: `/home/openclaw/.openclaw/workspace/skills`
+- This user has READ-ONLY access to OpenClaw's files (by design)
+
+**Architecture constraint:** LobsterLock must never write to OpenClaw's directories. All LobsterLock state lives in `~/.lobsterlock/`. The kill switch is the only action that touches OpenClaw: it runs `openclaw security audit --fix` then `systemctl stop openclaw`.
+
+**Testing against live OpenClaw:**
+- Test against the live gateway on this machine
+- Trigger test events by sending messages in the Control UI
+- Watch logs in real-time with `journalctl -u openclaw -f` to verify detection
+
+## Environment Variables
+
+- `ANTHROPIC_API_KEY` — required for reasoning engine and `lobsterlock check`
+- `DISCORD_BOT_TOKEN` — optional, alerts fall back to stderr without it
+- `DEBUG` — enables debug logging
