@@ -1,8 +1,14 @@
 #!/usr/bin/env node
 
+import { config as loadDotenv } from 'dotenv';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { Command } from 'commander';
 import { loadConfig, resolveConfigPath, ensureConfigDir } from './config.js';
 import { DB_FILE, PID_FILE } from './constants.js';
+
+// Load .env from ~/.lobsterlock/.env (override existing env vars)
+loadDotenv({ path: join(homedir(), '.lobsterlock', '.env'), override: true });
 import {
   initDatabase,
   getLastVerdict,

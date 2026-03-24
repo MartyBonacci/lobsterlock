@@ -58,7 +58,7 @@ export const VERDICT_LEVEL_ORDER: Record<string, number> = {
 export const DEFAULT_CONFIG: LobsterLockConfig = {
   openclaw_log: 'journalctl',
   openclaw_service: 'openclaw',
-  openclaw_cli: '/opt/openclaw-cli.sh',
+  openclaw_cli: '/usr/bin/openclaw',
   skills_watch: [
     '/home/openclaw/.openclaw/workspace/skills',
   ],
