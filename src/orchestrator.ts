@@ -15,9 +15,12 @@ import { AuditCollector } from './collector/audit.js';
 import { SkillsCollector } from './collector/skills.js';
 import { LogTailCollector } from './collector/log-tail.js';
 import { FsWatcherCollector } from './collector/fs-watcher.js';
+import { MemoryWatcherCollector } from './collector/memory-watcher.js';
 import { ReasoningEngine } from './reasoning/engine.js';
 import { AlertDispatcher } from './dispatcher/alert.js';
 import { KillHandler } from './dispatcher/kill.js';
+import { analyzeConfig } from './analysis/config-analyzer.js';
+import { uuid } from './util/uuid.js';
 import { writePid, removePid } from './util/pid.js';
 import type {
   EscalationState,
@@ -39,6 +42,7 @@ export class Orchestrator {
   private skillsCollector!: SkillsCollector;
   private logTailCollector!: LogTailCollector;
   private fsWatcherCollector!: FsWatcherCollector;
+  private memoryWatcherCollector!: MemoryWatcherCollector;
   private reasoningEngine!: ReasoningEngine;
   private alertDispatcher!: AlertDispatcher;
   private killHandler!: KillHandler;
@@ -91,6 +95,7 @@ export class Orchestrator {
     this.auditCollector = new AuditCollector(this.config);
     this.logTailCollector = new LogTailCollector(this.config);
     this.fsWatcherCollector = new FsWatcherCollector(this.config, this.skillsCollector);
+    this.memoryWatcherCollector = new MemoryWatcherCollector(this.config);
 
     // 5. Create trigger manager
     this.triggerManager = new TriggerManager(this.buffer, this.config);
@@ -98,6 +103,7 @@ export class Orchestrator {
     this.triggerManager.registerCollector(this.skillsCollector);
     this.triggerManager.registerCollector(this.logTailCollector);
     this.triggerManager.registerCollector(this.fsWatcherCollector);
+    this.triggerManager.registerCollector(this.memoryWatcherCollector);
     this.triggerManager.updateEscalationState(this.escalationState);
 
     if (this.escalationState.paused) {
@@ -128,6 +134,25 @@ export class Orchestrator {
     await this.skillsCollector.start();
     this.logTailCollector.start();
     this.fsWatcherCollector.start();
+    this.memoryWatcherCollector.start();
+
+    // 10b. Run initial config analysis
+    const openclawConfigPath = '/home/openclaw/.openclaw/openclaw.json';
+    const configFindings = analyzeConfig(openclawConfigPath);
+    for (const finding of configFindings) {
+      this.buffer.push({
+        id: uuid(),
+        type: 'config_change',
+        source: 'config-analyzer',
+        timestamp: Date.now(),
+        severity: finding.severity,
+        summary: `Dangerous config: ${finding.setting} -- ${finding.description}`,
+        payload: { dangerousSetting: true, ...finding },
+      });
+    }
+    if (configFindings.length > 0) {
+      console.log(`[WARN] Found ${configFindings.length} dangerous OpenClaw config setting(s)`);
+    }
 
     // 11. Write PID file
     writePid(this.pidPath);
@@ -155,6 +180,7 @@ export class Orchestrator {
       this.lastVerdict,
       this.auditCollector.lastSnapshot as Record<string, unknown> | null,
       this.skillsCollector.lastDelta,
+      this.memoryWatcherCollector.getIntegrityState(),
     );
 
     if (!verdict) {
@@ -258,6 +284,7 @@ export class Orchestrator {
         skills: this.skillsCollector.running ? 'running' : 'stopped',
         'log-tail': this.logTailCollector.running ? 'running' : 'stopped',
         'fs-watcher': this.fsWatcherCollector.running ? 'running' : 'stopped',
+        'memory-watcher': this.memoryWatcherCollector.running ? 'running' : 'stopped',
       },
       paused: this.escalationState.paused,
     };
@@ -283,6 +310,7 @@ export class Orchestrator {
     this.skillsCollector.stop();
     this.logTailCollector.stop();
     await this.fsWatcherCollector.stop();
+    await this.memoryWatcherCollector.stop();
 
     // 5. Shutdown Discord
     await this.alertDispatcher.shutdown();

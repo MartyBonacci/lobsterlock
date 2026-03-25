@@ -91,6 +91,31 @@ export class TriggerManager extends EventEmitter {
           s.type === 'process_event' &&
           (s.payload as Record<string, unknown>).restart === true,
       },
+      // v0.2: Memory integrity triggers
+      {
+        name: 'memory_file_change',
+        severityFloor: 'ALERT',
+        matches: (s) => s.type === 'memory_file_change',
+      },
+      {
+        name: 'suspicious_content_critical',
+        severityFloor: 'ALERT',
+        matches: (s) =>
+          s.type === 'suspicious_content' && s.severity === 'critical',
+      },
+      {
+        name: 'suspicious_content_high',
+        severityFloor: 'WATCH',
+        matches: (s) =>
+          s.type === 'suspicious_content' && s.severity === 'high',
+      },
+      {
+        name: 'dangerous_config_setting',
+        severityFloor: 'ALERT',
+        matches: (s) =>
+          s.type === 'config_change' &&
+          (s.payload as Record<string, unknown>).dangerousSetting === true,
+      },
     ];
   }
 
@@ -179,6 +204,14 @@ export class TriggerManager extends EventEmitter {
     );
     if (lowAnomalies.length >= this.config.threshold_signal_count) {
       return { name: 'log_anomaly_burst', severityFloor: 'WATCH' };
+    }
+
+    // Threshold: 2+ suspicious_content signals in time window (simultaneous injection)
+    const suspiciousContent = recent.filter(
+      (s) => s.type === 'suspicious_content',
+    );
+    if (suspiciousContent.length >= 2) {
+      return { name: 'suspicious_content_burst', severityFloor: 'ALERT' };
     }
 
     return null;

@@ -91,6 +91,11 @@ export function loadConfig(configPath?: string): LobsterLockConfig {
     process.exit(1);
   }
 
+  if ('memory_watch' in parsed && !Array.isArray(parsed.memory_watch)) {
+    console.error(`[FATAL] Config field "memory_watch" must be an array`);
+    process.exit(1);
+  }
+
   // Deep merge with defaults (one level deep is sufficient for this config shape)
   return { ...DEFAULT_CONFIG, ...parsed } as LobsterLockConfig;
 }

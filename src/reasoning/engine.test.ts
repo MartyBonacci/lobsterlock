@@ -99,6 +99,7 @@ describe('buildReasoningPrompt', () => {
       evictedCount: 0,
       securityPosture: null,
       skillInventoryDelta: null,
+      memoryIntegrity: null,
       escalationState: defaultEscalation,
       previousVerdict: null,
     };
@@ -126,6 +127,7 @@ describe('buildReasoningPrompt', () => {
       evictedCount: 47,
       securityPosture: null,
       skillInventoryDelta: null,
+      memoryIntegrity: null,
       escalationState: defaultEscalation,
       previousVerdict: null,
     };
@@ -141,6 +143,7 @@ describe('buildReasoningPrompt', () => {
       evictedCount: 0,
       securityPosture: null,
       skillInventoryDelta: null,
+      memoryIntegrity: null,
       escalationState: defaultEscalation,
       previousVerdict: null,
     };
@@ -156,6 +159,7 @@ describe('buildReasoningPrompt', () => {
       evictedCount: 0,
       securityPosture: null,
       skillInventoryDelta: null,
+      memoryIntegrity: null,
       escalationState: { ...defaultEscalation, consecutive_watch_count: 3 },
       previousVerdict: null,
     };

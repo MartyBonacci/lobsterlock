@@ -204,6 +204,7 @@ program
       evictedCount: 0,
       securityPosture: auditData,
       skillInventoryDelta: skillsData,
+      memoryIntegrity: null,
       escalationState: {
         consecutive_watch_count: 0,
         pending_alert_id: null,

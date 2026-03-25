@@ -9,6 +9,7 @@ export const KILL_SWITCH_FILE = '~/.lobsterlock/kill';
 
 // Log anomaly patterns for journalctl matching
 export const LOG_ANOMALY_PATTERNS: ReadonlyArray<{ pattern: RegExp; severity: Severity }> = [
+  // Original v0.1 patterns
   { pattern: /FATAL ERROR/i, severity: 'critical' },
   { pattern: /JavaScript heap out of memory/i, severity: 'critical' },
   { pattern: /heap limit/i, severity: 'critical' },
@@ -16,6 +17,18 @@ export const LOG_ANOMALY_PATTERNS: ReadonlyArray<{ pattern: RegExp; severity: Se
   { pattern: /gateway closed with code/i, severity: 'high' },
   { pattern: /auth(?:entication)?\s+fail/i, severity: 'medium' },
   { pattern: /ECONNREFUSED/i, severity: 'low' },
+  // v0.2: Network egress patterns (Cisco exfil, AMOS stealer)
+  { pattern: /\bcurl\b.*https?:\/\//i, severity: 'high' },
+  { pattern: /\bwget\b.*https?:\/\//i, severity: 'high' },
+  { pattern: />\s*\/dev\/null/i, severity: 'critical' },
+  { pattern: /\bbase64\b.*-d\b/i, severity: 'high' },
+  { pattern: /169\.254\.169\.254/, severity: 'critical' },
+  // v0.2: Gateway security patterns (ClawJacked, CVEs)
+  { pattern: /auth\w*\s+(?:attempt|reject|denied)/i, severity: 'medium' },
+  { pattern: /rapid auth|brute.?force|rate.?limit/i, severity: 'high' },
+  { pattern: /device\s+pair/i, severity: 'high' },
+  { pattern: /config\.apply/i, severity: 'high' },
+  { pattern: /exec\.approvals.*(?:off|disabled|false)/i, severity: 'critical' },
 ];
 
 // Pattern for detecting OpenClaw restart in journalctl
@@ -61,6 +74,13 @@ export const DEFAULT_CONFIG: LobsterLockConfig = {
   openclaw_cli: '/usr/bin/openclaw',
   skills_watch: [
     '/home/openclaw/.openclaw/workspace/skills',
+  ],
+  memory_watch: [
+    '/home/openclaw/.openclaw/SOUL.md',
+    '/home/openclaw/.openclaw/AGENTS.md',
+    '/home/openclaw/.openclaw/MEMORY.md',
+    '/home/openclaw/.openclaw/HEARTBEAT.md',
+    '/home/openclaw/.openclaw/USER.md',
   ],
   alert_channel: 'discord',
   alert_min_severity: 'WATCH',

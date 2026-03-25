@@ -5,9 +5,11 @@ export type SignalType =
   | 'audit_finding'
   | 'skills_diff'
   | 'process_event'
-  | 'config_change';
+  | 'config_change'
+  | 'memory_file_change'
+  | 'suspicious_content';
 
-export type SignalSource = 'log-tail' | 'fs-watcher' | 'audit' | 'skills';
+export type SignalSource = 'log-tail' | 'fs-watcher' | 'audit' | 'skills' | 'memory-watcher' | 'config-analyzer';
 
 export type Severity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 
@@ -53,6 +55,7 @@ export interface LobsterLockConfig {
   openclaw_service: string;
   openclaw_cli: string;
   skills_watch: string[];
+  memory_watch: string[];
   alert_channel: 'discord';
   alert_min_severity: VerdictLevel;
   kill_on_critical: boolean;
@@ -94,6 +97,29 @@ export interface AuditLogEntry {
   acknowledged_at: number | null;
 }
 
+// Content finding from pattern scanning
+export interface ContentFinding {
+  patternName: string;
+  severity: Severity;
+  matchedText: string;
+  lineNumber: number;
+  context: string;
+}
+
+// Memory integrity state for reasoning context
+export interface MemoryIntegrityState {
+  files: Record<string, { exists: boolean; hash: string | null; lastModified: number | null }>;
+  suspiciousFindings: ContentFinding[];
+}
+
+// Config analysis finding
+export interface ConfigFinding {
+  setting: string;
+  severity: Severity;
+  description: string;
+  currentValue: unknown;
+}
+
 // Reasoning context passed to prompt builder
 export interface ReasoningContext {
   triggerEvent: TriggerEvent;
@@ -101,6 +127,7 @@ export interface ReasoningContext {
   evictedCount: number;
   securityPosture: Record<string, unknown> | null;
   skillInventoryDelta: Record<string, unknown> | null;
+  memoryIntegrity: MemoryIntegrityState | null;
   escalationState: EscalationState;
   previousVerdict: Verdict | null;
 }
