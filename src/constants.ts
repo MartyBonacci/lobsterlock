@@ -29,6 +29,12 @@ export const LOG_ANOMALY_PATTERNS: ReadonlyArray<{ pattern: RegExp; severity: Se
   { pattern: /device\s+pair/i, severity: 'high' },
   { pattern: /config\.apply/i, severity: 'high' },
   { pattern: /exec\.approvals.*(?:off|disabled|false)/i, severity: 'critical' },
+  // v0.2: Cross-origin WebSocket detection (ClawJacked)
+  { pattern: /\[ws\]\s+\w+\s+connected\b.*\bremote=(?!127\.0\.0\.1\b|::1\b|100\.)\S+/, severity: 'high' },
+  { pattern: /\[ws\]\s+.*\bfwd=(?!n\/a\b)\S+/, severity: 'high' },
+  // v0.2: Heartbeat response routing anomalies
+  { pattern: /\[heartbeat\]\s+(?:deliver|send|route|dispatch)\w*\s+.*\bto\b\s+(?!none\b|owner\b)\S+/i, severity: 'high' },
+  { pattern: /\[heartbeat\]\s+.*\btarget=(?!none\b|owner\b)\S+/i, severity: 'high' },
 ];
 
 // Pattern for detecting OpenClaw restart in journalctl

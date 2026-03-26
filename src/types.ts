@@ -9,7 +9,7 @@ export type SignalType =
   | 'memory_file_change'
   | 'suspicious_content';
 
-export type SignalSource = 'log-tail' | 'fs-watcher' | 'audit' | 'skills' | 'memory-watcher' | 'config-analyzer';
+export type SignalSource = 'log-tail' | 'fs-watcher' | 'audit' | 'skills' | 'memory-watcher' | 'config-analyzer' | 'port-checker';
 
 export type Severity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 

@@ -11,6 +11,9 @@ import {
   loadEscalationState,
   saveBufferSnapshot,
   loadBufferSnapshot,
+  insertHashRecord,
+  getHashHistory,
+  pruneOldHashes,
 } from './audit-log.js';
 import type { AuditLogEntry, EscalationState, SignalEntry } from '../types.js';
 import type Database from 'better-sqlite3';
@@ -215,6 +218,50 @@ describe('audit-log', () => {
       const loaded = loadBufferSnapshot(db);
       assert.equal(loaded.length, 1);
       assert.equal(loaded[0].id, 's2');
+    });
+  });
+
+  describe('memory hash history', () => {
+    it('inserts and retrieves hash records', () => {
+      insertHashRecord(db, '/test/SOUL.md', 'hash1');
+      insertHashRecord(db, '/test/SOUL.md', 'hash2');
+      insertHashRecord(db, '/test/SOUL.md', 'hash3');
+
+      const history = getHashHistory(db, '/test/SOUL.md');
+      assert.equal(history.length, 3);
+    });
+
+    it('returns only distinct hashes', () => {
+      insertHashRecord(db, '/test/SOUL.md', 'same');
+      insertHashRecord(db, '/test/SOUL.md', 'same');
+      insertHashRecord(db, '/test/SOUL.md', 'same');
+
+      const history = getHashHistory(db, '/test/SOUL.md');
+      assert.equal(history.length, 1);
+    });
+
+    it('filters by file path', () => {
+      insertHashRecord(db, '/test/SOUL.md', 'hash1');
+      insertHashRecord(db, '/test/MEMORY.md', 'hash2');
+
+      const soulHistory = getHashHistory(db, '/test/SOUL.md');
+      assert.equal(soulHistory.length, 1);
+      assert.equal(soulHistory[0].hash, 'hash1');
+    });
+
+    it('pruneOldHashes removes old entries', () => {
+      // Insert with old timestamp by going directly to db
+      db.prepare(
+        'INSERT INTO memory_hash_history (file_path, hash, recorded_at) VALUES (?, ?, ?)',
+      ).run('/test/SOUL.md', 'old', 1000);
+      insertHashRecord(db, '/test/SOUL.md', 'new');
+
+      const pruned = pruneOldHashes(db, 1000); // 1 second window
+      assert.ok(pruned >= 1);
+
+      const remaining = getHashHistory(db, '/test/SOUL.md', 999999999999);
+      assert.equal(remaining.length, 1);
+      assert.equal(remaining[0].hash, 'new');
     });
   });
 });

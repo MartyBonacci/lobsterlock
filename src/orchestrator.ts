@@ -16,10 +16,12 @@ import { SkillsCollector } from './collector/skills.js';
 import { LogTailCollector } from './collector/log-tail.js';
 import { FsWatcherCollector } from './collector/fs-watcher.js';
 import { MemoryWatcherCollector } from './collector/memory-watcher.js';
+import { PortCheckerCollector } from './collector/port-checker.js';
 import { ReasoningEngine } from './reasoning/engine.js';
 import { AlertDispatcher } from './dispatcher/alert.js';
 import { KillHandler } from './dispatcher/kill.js';
 import { analyzeConfig } from './analysis/config-analyzer.js';
+import { pruneOldHashes } from './storage/audit-log.js';
 import { uuid } from './util/uuid.js';
 import { writePid, removePid } from './util/pid.js';
 import type {
@@ -43,6 +45,7 @@ export class Orchestrator {
   private logTailCollector!: LogTailCollector;
   private fsWatcherCollector!: FsWatcherCollector;
   private memoryWatcherCollector!: MemoryWatcherCollector;
+  private portCheckerCollector!: PortCheckerCollector;
   private reasoningEngine!: ReasoningEngine;
   private alertDispatcher!: AlertDispatcher;
   private killHandler!: KillHandler;
@@ -84,6 +87,9 @@ export class Orchestrator {
     const dbPath = resolveConfigPath(DB_FILE);
     this.db = initDatabase(dbPath);
 
+    // 1b. Prune old hash history
+    pruneOldHashes(this.db);
+
     // 2. Restore escalation state
     this.escalationState = loadEscalationState(this.db);
 
@@ -95,7 +101,8 @@ export class Orchestrator {
     this.auditCollector = new AuditCollector(this.config);
     this.logTailCollector = new LogTailCollector(this.config);
     this.fsWatcherCollector = new FsWatcherCollector(this.config, this.skillsCollector);
-    this.memoryWatcherCollector = new MemoryWatcherCollector(this.config);
+    this.memoryWatcherCollector = new MemoryWatcherCollector(this.config, this.db);
+    this.portCheckerCollector = new PortCheckerCollector(this.config);
 
     // 5. Create trigger manager
     this.triggerManager = new TriggerManager(this.buffer, this.config);
@@ -104,6 +111,7 @@ export class Orchestrator {
     this.triggerManager.registerCollector(this.logTailCollector);
     this.triggerManager.registerCollector(this.fsWatcherCollector);
     this.triggerManager.registerCollector(this.memoryWatcherCollector);
+    this.triggerManager.registerCollector(this.portCheckerCollector);
     this.triggerManager.updateEscalationState(this.escalationState);
 
     if (this.escalationState.paused) {
@@ -135,6 +143,7 @@ export class Orchestrator {
     this.logTailCollector.start();
     this.fsWatcherCollector.start();
     this.memoryWatcherCollector.start();
+    await this.portCheckerCollector.start();
 
     // 10b. Run initial config analysis
     const openclawConfigPath = '/home/openclaw/.openclaw/openclaw.json';
@@ -285,6 +294,7 @@ export class Orchestrator {
         'log-tail': this.logTailCollector.running ? 'running' : 'stopped',
         'fs-watcher': this.fsWatcherCollector.running ? 'running' : 'stopped',
         'memory-watcher': this.memoryWatcherCollector.running ? 'running' : 'stopped',
+        'port-checker': this.portCheckerCollector.running ? 'running' : 'stopped',
       },
       paused: this.escalationState.paused,
     };
@@ -311,6 +321,7 @@ export class Orchestrator {
     this.logTailCollector.stop();
     await this.fsWatcherCollector.stop();
     await this.memoryWatcherCollector.stop();
+    this.portCheckerCollector.stop();
 
     // 5. Shutdown Discord
     await this.alertDispatcher.shutdown();

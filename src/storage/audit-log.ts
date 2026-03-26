@@ -51,6 +51,16 @@ export function initDatabase(dbPath: string): Database.Database {
       signals TEXT NOT NULL,
       saved_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS memory_hash_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      file_path TEXT NOT NULL,
+      hash TEXT NOT NULL,
+      recorded_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_memory_hash_path_time
+      ON memory_hash_history(file_path, recorded_at);
   `);
 
   return db;
@@ -219,4 +229,47 @@ export function loadBufferSnapshot(
   } catch {
     return [];
   }
+}
+
+// --- Memory hash history (drift detection) ---
+
+/**
+ * Record a memory file hash for drift detection.
+ */
+export function insertHashRecord(
+  db: Database.Database,
+  filePath: string,
+  hash: string,
+): void {
+  db.prepare(
+    'INSERT INTO memory_hash_history (file_path, hash, recorded_at) VALUES (?, ?, ?)',
+  ).run(filePath, hash, Date.now());
+}
+
+/**
+ * Get distinct hashes for a file within a time window (default 7 days).
+ */
+export function getHashHistory(
+  db: Database.Database,
+  filePath: string,
+  windowMs: number = 7 * 24 * 60 * 60 * 1000,
+): { hash: string; recorded_at: number }[] {
+  const cutoff = Date.now() - windowMs;
+  return db.prepare(
+    'SELECT hash, MIN(recorded_at) as recorded_at FROM memory_hash_history WHERE file_path = ? AND recorded_at >= ? GROUP BY hash ORDER BY recorded_at',
+  ).all(filePath, cutoff) as { hash: string; recorded_at: number }[];
+}
+
+/**
+ * Prune hash history older than maxAge (default 7 days). Returns count deleted.
+ */
+export function pruneOldHashes(
+  db: Database.Database,
+  maxAgeMs: number = 7 * 24 * 60 * 60 * 1000,
+): number {
+  const cutoff = Date.now() - maxAgeMs;
+  const result = db.prepare(
+    'DELETE FROM memory_hash_history WHERE recorded_at < ?',
+  ).run(cutoff);
+  return result.changes;
 }

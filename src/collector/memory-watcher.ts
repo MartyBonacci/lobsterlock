@@ -5,6 +5,8 @@ import { dirname, basename } from 'node:path';
 import { watch, type FSWatcher } from 'chokidar';
 import { uuid } from '../util/uuid.js';
 import { scanContent } from '../analysis/content-patterns.js';
+import { insertHashRecord, getHashHistory } from '../storage/audit-log.js';
+import type Database from 'better-sqlite3';
 import type {
   ContentFinding,
   LobsterLockConfig,
@@ -24,14 +26,16 @@ interface FileState {
  */
 export class MemoryWatcherCollector extends EventEmitter {
   private config: LobsterLockConfig;
+  private db: Database.Database | null;
   private watcher: FSWatcher | null = null;
   private fileStates: Map<string, FileState> = new Map();
   private recentFindings: ContentFinding[] = [];
   private _running = false;
 
-  constructor(config: LobsterLockConfig) {
+  constructor(config: LobsterLockConfig, db: Database.Database | null = null) {
     super();
     this.config = config;
+    this.db = db;
   }
 
   get running(): boolean {
@@ -123,6 +127,9 @@ export class MemoryWatcherCollector extends EventEmitter {
         hash,
         lastModified: stat.mtimeMs,
       });
+      if (this.db) {
+        try { insertHashRecord(this.db, filePath, hash); } catch {}
+      }
     } catch {
       this.fileStates.set(filePath, {
         exists: false,
@@ -178,6 +185,36 @@ export class MemoryWatcherCollector extends EventEmitter {
         sizeBytes: content.length,
       },
     } satisfies SignalEntry);
+
+    // Store hash and check for drift
+    if (this.db) {
+      try {
+        insertHashRecord(this.db, path, newHash);
+        const history = getHashHistory(this.db, path);
+        if (history.length >= 5) {
+          const originalHash = history[0]?.hash;
+          const returnedToOriginal = history.some(
+            (h, i) => i > 0 && h.hash === originalHash,
+          );
+          if (!returnedToOriginal) {
+            this.emit('signal', {
+              id: uuid(),
+              type: 'memory_file_change',
+              source: 'memory-watcher',
+              timestamp: Date.now(),
+              severity: 'high',
+              summary: `Memory drift detected: ${filename} has ${history.length} distinct versions in 7 days without reverting`,
+              payload: {
+                file: filename,
+                path,
+                driftDetected: true,
+                distinctHashes: history.length,
+              },
+            } satisfies SignalEntry);
+          }
+        }
+      } catch {}
+    }
 
     // Scan content for suspicious patterns
     const findings = scanContent(content, filename);

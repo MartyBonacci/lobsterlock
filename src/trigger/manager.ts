@@ -116,6 +116,38 @@ export class TriggerManager extends EventEmitter {
           s.type === 'config_change' &&
           (s.payload as Record<string, unknown>).dangerousSetting === true,
       },
+      // v0.2: Port exposure, drift, WebSocket, heartbeat triggers
+      {
+        name: 'port_exposure',
+        severityFloor: 'ALERT',
+        matches: (s) =>
+          s.type === 'audit_finding' &&
+          s.source === 'port-checker' &&
+          (s.payload as Record<string, unknown>).portExposed === true,
+      },
+      {
+        name: 'memory_drift_detected',
+        severityFloor: 'ALERT',
+        matches: (s) =>
+          s.type === 'memory_file_change' &&
+          (s.payload as Record<string, unknown>).driftDetected === true,
+      },
+      {
+        name: 'cross_origin_websocket',
+        severityFloor: 'ALERT',
+        matches: (s) =>
+          s.type === 'log_anomaly' &&
+          s.source === 'log-tail' &&
+          /\[ws\]/.test((s.payload as Record<string, unknown>).line as string ?? ''),
+      },
+      {
+        name: 'heartbeat_routing_anomaly',
+        severityFloor: 'WATCH',
+        matches: (s) =>
+          s.type === 'log_anomaly' &&
+          s.source === 'log-tail' &&
+          /\[heartbeat\]/.test((s.payload as Record<string, unknown>).line as string ?? ''),
+      },
     ];
   }
 
