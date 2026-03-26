@@ -83,7 +83,7 @@ A rule-based tool would say "new file created." LobsterLock correlated filesyste
 ### Install
 
 ```bash
-git clone https://github.com/mbonacci/lobsterlock.git
+git clone https://github.com/MartyBonacci/lobsterlock.git
 cd lobsterlock
 npm install
 npm run build

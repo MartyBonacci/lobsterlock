@@ -6,7 +6,7 @@
 **Version:** 0.1.0-spec
 **Author:** Marty Bonacci
 **License:** MIT
-**Repo:** github.com/[your-handle]/lobsterlock
+**Repo:** github.com/MartyBonacci/lobsterlock
 **Domain:** lobsterlock.dev
 
 ---
