@@ -126,6 +126,58 @@ lobsterlock last     # Show most recent reasoning cycle
 lobsterlock ack      # Acknowledge alerts, reset escalation
 ```
 
+## Recommended Setup
+
+### State directory
+
+LobsterLock stores its config, database, PID file, and environment variables in `~/.lobsterlock/`. This directory is created automatically on first run, or you can create it manually:
+
+```bash
+mkdir -p ~/.lobsterlock
+```
+
+Place your `.env` (API keys) and `config.json` (path overrides) here.
+
+### Separate OS user
+
+LobsterLock is designed to run as a dedicated user with read-only access to OpenClaw's files. This is a security boundary: if OpenClaw is compromised, it can't tamper with LobsterLock's database or config. If LobsterLock has a bug, it can't accidentally modify OpenClaw's state.
+
+```bash
+sudo adduser --disabled-password --gecos "LobsterLock" lobsterlock
+sudo usermod -aG adm,systemd-journal,openclaw lobsterlock
+sudo chmod g+rx /home/openclaw
+sudo chmod -R g+r /home/openclaw/.openclaw
+```
+
+This gives the `lobsterlock` user:
+- **adm**: access to system logs
+- **systemd-journal**: access to `journalctl -u openclaw`
+- **openclaw**: read access to OpenClaw's config, skills, and memory files
+
+For development or quick testing, running as your own user works fine. The separate user matters for production.
+
+### OpenClaw path guidance
+
+The default config assumes the **DigitalOcean marketplace image** layout:
+- CLI: `/usr/bin/openclaw`
+- Skills: `/home/openclaw/.openclaw/workspace/skills`
+- Config: `/home/openclaw/.openclaw/openclaw.json`
+
+If your installation differs, override in `~/.lobsterlock/config.json`:
+
+```json
+{
+  "openclaw_cli": "/usr/local/bin/openclaw",
+  "skills_watch": ["/path/to/your/skills"]
+}
+```
+
+If using the marketplace helper scripts (which run commands as the `openclaw` user via `su`), set `openclaw_cli` to `/opt/openclaw-cli.sh`. Note this requires password-based `su` access.
+
+### What to expect on first run
+
+Running `lobsterlock check` on a default OpenClaw installation will typically produce a **WATCH** or **ALERT LOW** verdict identifying authentication configuration gaps (no gateway auth, no browser control auth). This is not a false positive. These are real findings from `openclaw security audit --json` that affect every default installation. The recommended fix is to configure `gateway.auth.token` in your `openclaw.json`.
+
 ## Architecture
 
 LobsterLock is a Node.js daemon (256MB heap) that runs as a separate OS user with read-only access to OpenClaw's files.
