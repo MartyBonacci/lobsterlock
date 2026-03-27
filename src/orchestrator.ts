@@ -20,11 +20,13 @@ import { PortCheckerCollector } from './collector/port-checker.js';
 import { ReasoningEngine } from './reasoning/engine.js';
 import { AlertDispatcher } from './dispatcher/alert.js';
 import { KillHandler } from './dispatcher/kill.js';
-import { analyzeConfig } from './analysis/config-analyzer.js';
+import { analyzeConfig, hasDockerSandbox } from './analysis/config-analyzer.js';
 import { pruneOldHashes } from './storage/audit-log.js';
 import { uuid } from './util/uuid.js';
 import { writePid, removePid } from './util/pid.js';
+import { OPENCLAW_CONFIG_PATH } from './constants.js';
 import type {
+  ConfigFinding,
   EscalationState,
   LobsterLockConfig,
   StatusReport,
@@ -50,6 +52,7 @@ export class Orchestrator {
   private alertDispatcher!: AlertDispatcher;
   private killHandler!: KillHandler;
   private escalationState!: EscalationState;
+  private configFindings: ConfigFinding[] = [];
   private lastVerdict: Verdict | null = null;
   private lastTrigger: TriggerEvent | null = null;
   private startTime: number = 0;
@@ -102,7 +105,11 @@ export class Orchestrator {
     this.logTailCollector = new LogTailCollector(this.config);
     this.fsWatcherCollector = new FsWatcherCollector(this.config, this.skillsCollector);
     this.memoryWatcherCollector = new MemoryWatcherCollector(this.config, this.db);
-    this.portCheckerCollector = new PortCheckerCollector(this.config);
+    this.portCheckerCollector = new PortCheckerCollector(
+      this.config,
+      undefined,
+      hasDockerSandbox(OPENCLAW_CONFIG_PATH),
+    );
 
     // 5. Create trigger manager
     this.triggerManager = new TriggerManager(this.buffer, this.config);
@@ -146,9 +153,9 @@ export class Orchestrator {
     await this.portCheckerCollector.start();
 
     // 10b. Run initial config analysis
-    const openclawConfigPath = '/home/openclaw/.openclaw/openclaw.json';
-    const configFindings = analyzeConfig(openclawConfigPath);
-    for (const finding of configFindings) {
+    this.configFindings = analyzeConfig(OPENCLAW_CONFIG_PATH);
+    const dangerFindings = this.configFindings.filter((f) => f.severity !== 'info');
+    for (const finding of dangerFindings) {
       this.buffer.push({
         id: uuid(),
         type: 'config_change',
@@ -159,8 +166,12 @@ export class Orchestrator {
         payload: { dangerousSetting: true, ...finding },
       });
     }
-    if (configFindings.length > 0) {
-      console.log(`[WARN] Found ${configFindings.length} dangerous OpenClaw config setting(s)`);
+    if (dangerFindings.length > 0) {
+      console.log(`[WARN] Found ${dangerFindings.length} dangerous OpenClaw config setting(s)`);
+    }
+    const safeFindings = this.configFindings.filter((f) => f.severity === 'info');
+    if (safeFindings.length > 0) {
+      console.log(`[INFO] ${safeFindings.length} safe config setting(s) confirmed`);
     }
 
     // 11. Write PID file
@@ -182,6 +193,11 @@ export class Orchestrator {
   private async onTrigger(trigger: TriggerEvent): Promise<void> {
     this.lastTrigger = trigger;
 
+    // Refresh config analysis if a config change triggered this
+    if (trigger.rule.includes('config_modified')) {
+      this.configFindings = analyzeConfig(OPENCLAW_CONFIG_PATH);
+    }
+
     // Invoke reasoning engine
     const verdict = await this.reasoningEngine.invoke(
       trigger,
@@ -190,6 +206,7 @@ export class Orchestrator {
       this.auditCollector.lastSnapshot as Record<string, unknown> | null,
       this.skillsCollector.lastDelta,
       this.memoryWatcherCollector.getIntegrityState(),
+      this.configFindings,
     );
 
     if (!verdict) {

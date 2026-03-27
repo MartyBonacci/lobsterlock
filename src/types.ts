@@ -128,6 +128,7 @@ export interface ReasoningContext {
   securityPosture: Record<string, unknown> | null;
   skillInventoryDelta: Record<string, unknown> | null;
   memoryIntegrity: MemoryIntegrityState | null;
+  configAnalysis: ConfigFinding[] | null;
   escalationState: EscalationState;
   previousVerdict: Verdict | null;
 }

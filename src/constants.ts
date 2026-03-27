@@ -6,6 +6,7 @@ export const CONFIG_FILE = '~/.lobsterlock/config.json';
 export const DB_FILE = '~/.lobsterlock/lobsterlock.db';
 export const PID_FILE = '~/.lobsterlock/lobsterlock.pid';
 export const KILL_SWITCH_FILE = '~/.lobsterlock/kill';
+export const OPENCLAW_CONFIG_PATH = '/home/openclaw/.openclaw/openclaw.json';
 
 // Log anomaly patterns for journalctl matching
 export const LOG_ANOMALY_PATTERNS: ReadonlyArray<{ pattern: RegExp; severity: Severity }> = [
@@ -29,6 +30,9 @@ export const LOG_ANOMALY_PATTERNS: ReadonlyArray<{ pattern: RegExp; severity: Se
   { pattern: /device\s+pair/i, severity: 'high' },
   { pattern: /config\.apply/i, severity: 'high' },
   { pattern: /exec\.approvals.*(?:off|disabled|false)/i, severity: 'critical' },
+  // v0.2: Exec approval bypass detection
+  { pattern: /\btools\.exec\.host\b/i, severity: 'critical' },
+  { pattern: /\bexec\b.*\bhost\b.*\bbypass/i, severity: 'critical' },
   // v0.2: Cross-origin WebSocket detection (ClawJacked)
   { pattern: /\[ws\]\s+\w+\s+connected\b.*\bremote=(?!127\.0\.0\.1\b|::1\b|100\.)\S+/, severity: 'high' },
   { pattern: /\[ws\]\s+.*\bfwd=(?!n\/a\b)\S+/, severity: 'high' },
@@ -100,5 +104,5 @@ export const DEFAULT_CONFIG: LobsterLockConfig = {
   trigger_debounce_ms: 3000,
   signal_buffer_max_entries: 500,
   hourly_digest: false,
-  openclaw_version_lock: '3.12',
+  openclaw_version_lock: '3.24',
 };

@@ -100,6 +100,7 @@ describe('buildReasoningPrompt', () => {
       securityPosture: null,
       skillInventoryDelta: null,
       memoryIntegrity: null,
+      configAnalysis: null,
       escalationState: defaultEscalation,
       previousVerdict: null,
     };
@@ -128,6 +129,7 @@ describe('buildReasoningPrompt', () => {
       securityPosture: null,
       skillInventoryDelta: null,
       memoryIntegrity: null,
+      configAnalysis: null,
       escalationState: defaultEscalation,
       previousVerdict: null,
     };
@@ -144,6 +146,7 @@ describe('buildReasoningPrompt', () => {
       securityPosture: null,
       skillInventoryDelta: null,
       memoryIntegrity: null,
+      configAnalysis: null,
       escalationState: defaultEscalation,
       previousVerdict: null,
     };
@@ -160,6 +163,7 @@ describe('buildReasoningPrompt', () => {
       securityPosture: null,
       skillInventoryDelta: null,
       memoryIntegrity: null,
+      configAnalysis: null,
       escalationState: { ...defaultEscalation, consecutive_watch_count: 3 },
       previousVerdict: null,
     };

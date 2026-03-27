@@ -15,14 +15,20 @@ interface PortBinding {
 export class PortCheckerCollector extends EventEmitter {
   private config: LobsterLockConfig;
   private execFn: ExecFn;
+  private dockerSandboxActive: boolean;
   private interval: ReturnType<typeof setInterval> | null = null;
   private previousExposed = false;
   private _running = false;
 
-  constructor(config: LobsterLockConfig, execFn: ExecFn = execCommand) {
+  constructor(
+    config: LobsterLockConfig,
+    execFn: ExecFn = execCommand,
+    dockerSandboxActive = false,
+  ) {
     super();
     this.config = config;
     this.execFn = execFn;
+    this.dockerSandboxActive = dockerSandboxActive;
   }
 
   get running(): boolean {
@@ -67,20 +73,22 @@ export class PortCheckerCollector extends EventEmitter {
       const gatewayBindings = bindings.filter((b) => b.port === 18789);
       const exposed = gatewayBindings.some((b) => !this.isLoopback(b.address));
 
+      // Docker sandbox mode: downgrade severity since 0.0.0.0 binding may be intentional
+      const newSeverity = this.dockerSandboxActive ? 'medium' : 'critical';
+      const persistSeverity = this.dockerSandboxActive ? 'low' : 'medium';
+
       if (isBaseline) {
         this.previousExposed = exposed;
         if (exposed) {
-          this.emitExposureSignal(gatewayBindings, 'critical');
+          this.emitExposureSignal(gatewayBindings, newSeverity);
         }
         return;
       }
 
       if (exposed && !this.previousExposed) {
-        // Newly exposed
-        this.emitExposureSignal(gatewayBindings, 'critical');
+        this.emitExposureSignal(gatewayBindings, newSeverity);
       } else if (exposed && this.previousExposed) {
-        // Persistently exposed
-        this.emitExposureSignal(gatewayBindings, 'medium');
+        this.emitExposureSignal(gatewayBindings, persistSeverity);
       }
 
       this.previousExposed = exposed;
@@ -122,11 +130,15 @@ export class PortCheckerCollector extends EventEmitter {
 
   private emitExposureSignal(
     bindings: PortBinding[],
-    severity: 'critical' | 'medium',
+    severity: 'critical' | 'medium' | 'low',
   ): void {
     const addresses = bindings
       .filter((b) => !this.isLoopback(b.address))
       .map((b) => b.address);
+
+    const containerNote = this.dockerSandboxActive
+      ? ' (Docker sandbox active -- may be intentional for container communication)'
+      : '';
 
     this.emit('signal', {
       id: uuid(),
@@ -134,10 +146,11 @@ export class PortCheckerCollector extends EventEmitter {
       source: 'port-checker',
       timestamp: Date.now(),
       severity,
-      summary: `Gateway port 18789 exposed on non-loopback address: ${addresses.join(', ')}`,
+      summary: `Gateway port 18789 exposed on non-loopback address: ${addresses.join(', ')}${containerNote}`,
       payload: {
         portExposed: true,
         port: 18789,
+        containerMode: this.dockerSandboxActive,
         exposedAddresses: addresses,
         allBindings: bindings,
       },

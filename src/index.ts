@@ -189,6 +189,14 @@ program
       console.error('Failed to list skills:', err);
     }
 
+    // Analyze actual OpenClaw config file (ground truth)
+    const { analyzeConfig } = await import('./analysis/config-analyzer.js');
+    const { OPENCLAW_CONFIG_PATH } = await import('./constants.js');
+    const configFindings = analyzeConfig(OPENCLAW_CONFIG_PATH);
+    const dangers = configFindings.filter((f) => f.severity !== 'info');
+    const safe = configFindings.filter((f) => f.severity === 'info');
+    console.log(`Config analysis: ${dangers.length} warning(s), ${safe.length} confirmed safe`);
+
     // Build prompt
     const context = {
       triggerEvent: {
@@ -205,6 +213,7 @@ program
       securityPosture: auditData,
       skillInventoryDelta: skillsData,
       memoryIntegrity: null,
+      configAnalysis: configFindings,
       escalationState: {
         consecutive_watch_count: 0,
         pending_alert_id: null,

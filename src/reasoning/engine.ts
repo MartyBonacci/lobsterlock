@@ -50,6 +50,7 @@ export class ReasoningEngine {
     securityPosture: Record<string, unknown> | null = null,
     skillInventoryDelta: Record<string, unknown> | null = null,
     memoryIntegrity: import('../types.js').MemoryIntegrityState | null = null,
+    configAnalysis: import('../types.js').ConfigFinding[] | null = null,
   ): Promise<Verdict | null> {
     if (this.busy) {
       return {
@@ -70,6 +71,7 @@ export class ReasoningEngine {
       securityPosture,
       skillInventoryDelta,
       memoryIntegrity,
+      configAnalysis,
     );
     this.inflightPromise = promise;
 
@@ -100,6 +102,7 @@ export class ReasoningEngine {
     securityPosture: Record<string, unknown> | null,
     skillInventoryDelta: Record<string, unknown> | null,
     memoryIntegrity: import('../types.js').MemoryIntegrityState | null = null,
+    configAnalysis: import('../types.js').ConfigFinding[] | null = null,
   ): Promise<Verdict | null> {
     const context: ReasoningContext = {
       triggerEvent: trigger,
@@ -108,6 +111,7 @@ export class ReasoningEngine {
       securityPosture,
       skillInventoryDelta,
       memoryIntegrity,
+      configAnalysis,
       escalationState,
       previousVerdict,
     };
