@@ -17,7 +17,9 @@ OpenClaw is the fastest-growing open-source AI agent runtime, and one of 2026's 
 
 Attack research from [Cisco](https://github.com/cisco-ai-defense/skill-scanner), [CNCERT/CC](https://www.cncert.org.cn/), [Oasis Security (ClawJacked)](https://www.oasis.security/resources/blog/clawjacked-how-any-website-could-hijack-your-ai-agent), [Palo Alto Networks](https://unit42.paloaltonetworks.com/), [CrowdStrike](https://www.crowdstrike.com/), and [others](https://thehackernews.com/2026/03/openclaw-ai-agent-flaws-could-enable.html) has documented attack vectors from no-click data exfiltration via link previews to persistent memory poisoning that survives skill uninstallation.
 
-Pattern matchers catch known threats. They can't catch novel behavior that looks individually benign but is collectively alarming. That gap is what LobsterLock fills.
+OpenClaw v2026.3.22+ hardened gateway auth and sandboxing defaults, which is real progress. But memory file poisoning, exec approval bypasses (sub-agents still skip approvals), and instruction-layer skill attacks remain architecturally unaddressed. These are semantic threats that require reasoning over combined signals, not just pattern matching.
+
+That gap is what LobsterLock fills.
 
 ## How It Works
 
@@ -38,17 +40,17 @@ Every reasoning cycle is logged to SQLite with the full prompt, response, and si
 
 ## What It Detects Today
 
-LobsterLock v0.2 covers approximately 40-45% of OpenClaw's documented attack surface across five monitoring categories. The remaining gaps are documented and on the roadmap.
+LobsterLock v0.2 covers approximately 40-45% of OpenClaw's documented attack surface across five monitoring categories. Tested against OpenClaw v2026.3.24 (March 2026). The remaining gaps are documented and on the roadmap.
 
 | Category | Coverage | What's Implemented | What's Next |
 |----------|----------|-------------------|-------------|
 | **Memory Integrity** | ~50% | File hashing + baseline diffing, content scanning (base64, zero-width unicode, instruction injection, credential paths, suspicious commands, SSRF targets, known C2 IPs), 7-day drift detection | Write source attribution, gradual drift ML |
 | **Network Egress** | ~40% | Log-based curl/wget detection, /dev/null redirect detection, SSRF target patterns, known C2 IP blocklist, `dangerouslyAllowPrivateNetwork` config check | Active network monitoring via ss/netstat, domain allowlists |
-| **Gateway Security** | ~35% | Port 18789 exposure monitoring, gateway auth validation, cross-origin WebSocket detection, brute-force log patterns, `exec.approvals` + `config.apply` detection | WebSocket connection analysis, device pairing monitoring |
+| **Gateway Security** | ~55% | Port 18789 exposure monitoring (Docker-aware), gateway auth validation with config ground truth, cross-origin WebSocket detection, brute-force log patterns, `exec.approvals` + `config.apply` detection, exec host-mode bypass detection | WebSocket connection analysis, device pairing monitoring |
 | **Heartbeat System** | ~65% | HEARTBEAT.md watching + content scanning, `heartbeat.target` config check, heartbeat interval validation, response routing alerts | Token consumption tracking |
 | **Autonomous Actions** | 0% | Not yet started | OAuth grant detection, account creation monitoring, identity data tracking |
 
-151 tests. All passing.
+160 tests. All passing.
 
 ## Live Proof of Concept
 
@@ -70,6 +72,21 @@ credentials, making lateral movement or injection more plausible.
 ```
 
 A rule-based tool would say "new file created." LobsterLock correlated filesystem changes with log silence and auth gaps to identify a pattern consistent with unauthorized skill installation. That semantic correlation is the core value proposition.
+
+On a properly configured v2026.3.24 deployment (gateway auth enabled, sandbox active, trusted proxies set), LobsterLock correctly returns **CLEAR** with 4 confirmed-safe findings:
+
+```
+Config analysis: 0 warning(s), 4 confirmed safe
+
+CLEAR
+The security audit reports two critical findings (missing gateway auth, browser control
+no auth), but the config_analysis section confirms gateway auth is configured
+(token-based), trusted proxies are set, and sandbox mode with Docker isolation is
+active -- the audit is reading from a different user context and seeing defaults.
+No actionable security concerns.
+```
+
+LobsterLock doesn't just find problems. It validates good configurations and explains why apparent issues are actually false positives from user-context mismatches.
 
 ## Quick Start
 
