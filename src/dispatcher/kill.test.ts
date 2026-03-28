@@ -1,6 +1,5 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { EventEmitter } from 'node:events';
 import { KillHandler } from './kill.js';
 import { DEFAULT_CONFIG } from '../constants.js';
 import type { ExecResult } from '../util/exec.js';
@@ -25,7 +24,7 @@ describe('KillHandler', () => {
     const calls: { cmd: string; args: string[] }[] = [];
     const mockExec = async (cmd: string, args: string[]): Promise<ExecResult> => {
       calls.push({ cmd, args });
-      return { stdout: 'ok', stderr: '', exitCode: 0 };
+      return { stdout: 'ok', stderr: '', exitCode: 0, timedOut: false };
     };
 
     let alertSent = false;
@@ -55,6 +54,40 @@ describe('KillHandler', () => {
     assert.ok(alertMessage.includes('KILL verdict executed'));
     assert.ok(alertMessage.includes('systemctl stop'));
     assert.ok(paused, 'trigger manager should be paused');
+  });
+
+  it('escalates to hard kill when soft kill times out', async () => {
+    const calls: { cmd: string; args: string[] }[] = [];
+    const mockExec = async (cmd: string, args: string[]): Promise<ExecResult> => {
+      calls.push({ cmd, args });
+      // Soft kill returns timedOut
+      if (args.includes('--fix')) {
+        return { stdout: '', stderr: '', exitCode: -1, timedOut: true };
+      }
+      return { stdout: '', stderr: '', exitCode: 0, timedOut: false };
+    };
+
+    let alertMessage = '';
+    const mockDispatcher = {
+      sendDegradedAlert: async (msg: string) => { alertMessage = msg; },
+    } as unknown as AlertDispatcher;
+
+    let paused = false;
+    const mockTriggerManager = {
+      pause: () => { paused = true; },
+    } as unknown as TriggerManager;
+
+    const handler = new KillHandler(DEFAULT_CONFIG, mockDispatcher, mockTriggerManager, mockExec);
+    await handler.execute(makeVerdict());
+
+    // Both commands should still be called
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[0].args, ['security', 'audit', '--fix']);
+    assert.equal(calls[1].cmd, 'systemctl');
+
+    // Alert should mention timeout
+    assert.ok(alertMessage.includes('timed out'), 'Alert should mention timeout');
+    assert.ok(paused, 'trigger manager should still be paused');
   });
 
   it('handles fix command failure gracefully', async () => {

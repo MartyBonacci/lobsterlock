@@ -53,6 +53,9 @@ export const VERDICT_REGEX = /^(CLEAR|WATCH\s+.+|ALERT\s+(?:LOW|MEDIUM|HIGH)\s+.
 // Shutdown grace period for in-flight reasoning
 export const SHUTDOWN_GRACE_MS = 10_000;
 
+// Kill switch soft command timeout (openclaw security audit --fix)
+export const KILL_SOFT_TIMEOUT_MS = 30_000;
+
 // Max retries for log tail child process restart
 export const LOG_TAIL_MAX_RETRIES = 3;
 export const LOG_TAIL_RETRY_DELAY_MS = 5_000;

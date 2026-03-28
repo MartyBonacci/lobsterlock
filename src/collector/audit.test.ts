@@ -16,7 +16,7 @@ function makeAuditJson(summary = { critical: 0, warn: 0, info: 1 }, findings: ob
 }
 
 function mockExec(stdout: string, exitCode = 0): (cmd: string, args: string[]) => Promise<ExecResult> {
-  return async () => ({ stdout, stderr: '', exitCode });
+  return async () => ({ stdout, stderr: '', exitCode, timedOut: false });
 }
 
 describe('AuditCollector', () => {
@@ -50,9 +50,9 @@ describe('AuditCollector', () => {
     const exec = async (): Promise<ExecResult> => {
       callCount++;
       if (callCount === 1) {
-        return { stdout: makeAuditJson({ critical: 0, warn: 0, info: 1 }), stderr: '', exitCode: 0 };
+        return { stdout: makeAuditJson({ critical: 0, warn: 0, info: 1 }), stderr: '', exitCode: 0, timedOut: false };
       }
-      return { stdout: makeAuditJson({ critical: 1, warn: 0, info: 1 }), stderr: '', exitCode: 0 };
+      return { stdout: makeAuditJson({ critical: 1, warn: 0, info: 1 }), stderr: '', exitCode: 0, timedOut: false };
     };
 
     const signals: SignalEntry[] = [];
@@ -79,7 +79,7 @@ describe('AuditCollector', () => {
           stdout: makeAuditJson({ critical: 0, warn: 0, info: 1 }, [
             { checkId: 'existing', severity: 'info', title: 'Existing', detail: '' },
           ]),
-          stderr: '', exitCode: 0,
+          stderr: '', exitCode: 0, timedOut: false,
         };
       }
       return {
@@ -87,7 +87,7 @@ describe('AuditCollector', () => {
           { checkId: 'existing', severity: 'info', title: 'Existing', detail: '' },
           { checkId: 'new_finding', severity: 'warn', title: 'New Warning', detail: 'bad stuff' },
         ]),
-        stderr: '', exitCode: 0,
+        stderr: '', exitCode: 0, timedOut: false,
       };
     };
 
@@ -107,7 +107,7 @@ describe('AuditCollector', () => {
 
   it('emits health signal on exec failure', async () => {
     const exec = async (): Promise<ExecResult> => ({
-      stdout: '', stderr: 'command not found', exitCode: 127,
+      stdout: '', stderr: 'command not found', exitCode: 127, timedOut: false,
     });
 
     const signals: SignalEntry[] = [];

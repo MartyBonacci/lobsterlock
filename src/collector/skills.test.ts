@@ -17,7 +17,7 @@ const baselineSkills = [
 describe('SkillsCollector', () => {
   it('emits baseline event on start', async () => {
     const exec = async (): Promise<ExecResult> => ({
-      stdout: makeSkillsJson(baselineSkills), stderr: '', exitCode: 0,
+      stdout: makeSkillsJson(baselineSkills), stderr: '', exitCode: 0, timedOut: false,
     });
 
     let baselineFired = false;
@@ -35,14 +35,14 @@ describe('SkillsCollector', () => {
     const exec = async (): Promise<ExecResult> => {
       callCount++;
       if (callCount === 1) {
-        return { stdout: makeSkillsJson(baselineSkills), stderr: '', exitCode: 0 };
+        return { stdout: makeSkillsJson(baselineSkills), stderr: '', exitCode: 0, timedOut: false };
       }
       return {
         stdout: makeSkillsJson([
           ...baselineSkills,
           { name: 'suspicious-skill', eligible: true, disabled: false, blockedByAllowlist: false, bundled: false, missing: { bins: [] } },
         ]),
-        stderr: '', exitCode: 0,
+        stderr: '', exitCode: 0, timedOut: false,
       };
     };
 
@@ -71,7 +71,7 @@ describe('SkillsCollector', () => {
             ...baselineSkills,
             { name: 'coding-agent', eligible: false, disabled: true, blockedByAllowlist: false, bundled: false, missing: { bins: [] } },
           ]),
-          stderr: '', exitCode: 0,
+          stderr: '', exitCode: 0, timedOut: false,
         };
       }
       return {
@@ -79,7 +79,7 @@ describe('SkillsCollector', () => {
           ...baselineSkills,
           { name: 'coding-agent', eligible: true, disabled: false, blockedByAllowlist: false, bundled: false, missing: { bins: [] } },
         ]),
-        stderr: '', exitCode: 0,
+        stderr: '', exitCode: 0, timedOut: false,
       };
     };
 
@@ -102,11 +102,11 @@ describe('SkillsCollector', () => {
     const exec = async (): Promise<ExecResult> => {
       callCount++;
       if (callCount === 1) {
-        return { stdout: makeSkillsJson(baselineSkills), stderr: '', exitCode: 0 };
+        return { stdout: makeSkillsJson(baselineSkills), stderr: '', exitCode: 0, timedOut: false };
       }
       return {
         stdout: makeSkillsJson([baselineSkills[0]]), // removed tmux
-        stderr: '', exitCode: 0,
+        stderr: '', exitCode: 0, timedOut: false,
       };
     };
 
@@ -129,14 +129,14 @@ describe('SkillsCollector', () => {
     const exec = async (): Promise<ExecResult> => {
       callCount++;
       if (callCount <= 1) {
-        return { stdout: makeSkillsJson(baselineSkills), stderr: '', exitCode: 0 };
+        return { stdout: makeSkillsJson(baselineSkills), stderr: '', exitCode: 0, timedOut: false };
       }
       return {
         stdout: makeSkillsJson([
           ...baselineSkills,
           { name: 'new-one', eligible: true, disabled: false, blockedByAllowlist: false, bundled: false, missing: { bins: [] } },
         ]),
-        stderr: '', exitCode: 0,
+        stderr: '', exitCode: 0, timedOut: false,
       };
     };
 

@@ -360,32 +360,39 @@ program
     console.log('=== LobsterLock Kill Switch Test ===');
     console.log();
     console.log('This will test the two-step kill switch against the LIVE OpenClaw instance.');
-    console.log('Step 1 (soft): ' + config.openclaw_cli + ' security audit --fix');
+    console.log('Step 1 (soft): ' + config.openclaw_cli + ' security audit --fix (30s timeout)');
     console.log('Step 2 (hard): systemctl stop ' + config.openclaw_service);
     console.log();
 
     if (opts.dryRun) {
       console.log('[DRY RUN] No commands will be executed.');
       console.log();
-      console.log('Step 1 would run: ' + config.openclaw_cli + ' security audit --fix');
+      console.log('Step 1 would run: ' + config.openclaw_cli + ' security audit --fix (30s timeout)');
       console.log('Step 2 would run: systemctl stop ' + config.openclaw_service);
       console.log('Restore would run: systemctl start ' + config.openclaw_service);
       return;
     }
 
     // Step 1: Soft kill
-    const answer1 = await ask('Run SOFT kill (security audit --fix)? [y/N] ');
+    const answer1 = await ask('Run SOFT kill (security audit --fix, 30s timeout)? [y/N] ');
     if (answer1 !== 'y' && answer1 !== 'yes') {
       console.log('Aborted.');
       return;
     }
 
-    console.log('Running soft kill...');
+    console.log('Running soft kill (30s timeout)...');
+    let softTimedOut = false;
     try {
-      const fixResult = await execCommand(config.openclaw_cli, ['security', 'audit', '--fix']);
-      console.log(`Exit code: ${fixResult.exitCode}`);
-      if (fixResult.stdout) console.log('stdout: ' + fixResult.stdout.slice(0, 500));
-      if (fixResult.stderr) console.log('stderr: ' + fixResult.stderr.slice(0, 500));
+      const fixResult = await execCommand(config.openclaw_cli, ['security', 'audit', '--fix'], 30_000);
+      if (fixResult.timedOut) {
+        softTimedOut = true;
+        console.log('Soft kill TIMED OUT after 30 seconds.');
+        console.log('The command hung and was killed. This is expected if running as a non-openclaw user.');
+      } else {
+        console.log(`Exit code: ${fixResult.exitCode}`);
+        if (fixResult.stdout) console.log('stdout: ' + fixResult.stdout.slice(0, 500));
+        if (fixResult.stderr) console.log('stderr: ' + fixResult.stderr.slice(0, 500));
+      }
     } catch (err) {
       console.error('Soft kill failed:', err);
     }

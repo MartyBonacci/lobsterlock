@@ -20,7 +20,7 @@ LISTEN 0      511     192.168.1.100:18789  0.0.0.0:*
 LISTEN 0      4096    0.0.0.0:22           0.0.0.0:*`;
 
 function mockExec(stdout: string): (cmd: string, args: string[]) => Promise<ExecResult> {
-  return async () => ({ stdout, stderr: '', exitCode: 0 });
+  return async () => ({ stdout, stderr: '', exitCode: 0, timedOut: false });
 }
 
 describe('PortCheckerCollector', () => {
@@ -88,7 +88,7 @@ describe('PortCheckerCollector', () => {
         callCount++;
         return {
           stdout: callCount === 1 ? LOOPBACK_OUTPUT : EXPOSED_OUTPUT,
-          stderr: '', exitCode: 0,
+          stderr: '', exitCode: 0, timedOut: false,
         };
       };
 
@@ -125,7 +125,7 @@ describe('PortCheckerCollector', () => {
 
     it('emits health signal on ss failure', async () => {
       const exec = async (): Promise<ExecResult> => ({
-        stdout: '', stderr: 'command not found', exitCode: 127,
+        stdout: '', stderr: 'command not found', exitCode: 127, timedOut: false,
       });
 
       const signals: SignalEntry[] = [];
