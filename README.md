@@ -109,7 +109,15 @@ npm link
 
 ### Configure
 
-Create `~/.lobsterlock/.env`:
+The fastest way to configure is the interactive setup wizard:
+
+```bash
+lobsterlock init
+```
+
+This auto-detects your OpenClaw paths, creates `~/.lobsterlock/config.json` and `.env`, validates connectivity, and tells you what to do next.
+
+Or configure manually. Create `~/.lobsterlock/.env`:
 
 ```
 ANTHROPIC_API_KEY=sk-ant-your-key-here
@@ -134,7 +142,7 @@ Optionally create `~/.lobsterlock/config.json` (all fields have sensible default
 # One-shot security check (no daemon needed)
 lobsterlock check
 
-# Start the monitoring daemon
+# Start the monitoring daemon (foreground)
 lobsterlock start
 
 # Other commands
@@ -142,6 +150,34 @@ lobsterlock status   # Show current status and escalation state
 lobsterlock last     # Show most recent reasoning cycle
 lobsterlock ack      # Acknowledge alerts, reset escalation
 ```
+
+### Production Deployment
+
+Install as a systemd service for always-on monitoring:
+
+```bash
+lobsterlock install-service
+```
+
+This copies the service file to `/etc/systemd/system/`, enables it, and starts monitoring. Requires root access. If unavailable, the command prints the manual steps.
+
+The service runs as the `lobsterlock` user, restarts on failure with a 10-second delay, and starts after the OpenClaw service. Logs go to journalctl:
+
+```bash
+journalctl -u lobsterlock -f     # follow LobsterLock logs
+```
+
+### Testing the Kill Switch
+
+Before relying on the kill switch in production, test it:
+
+```bash
+lobsterlock test-kill --dry-run   # see what would happen
+lobsterlock test-kill             # interactive test with confirmation gates
+lobsterlock test-kill --restore   # restart OpenClaw after testing
+```
+
+The test requires explicit `y` confirmation before each step. Nothing executes without your approval.
 
 ## Recommended Setup
 

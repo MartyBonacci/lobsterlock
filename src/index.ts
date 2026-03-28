@@ -283,4 +283,299 @@ program
     }
   });
 
+program
+  .command('install-service')
+  .description('Install LobsterLock as a systemd service')
+  .action(async () => {
+    const { existsSync, copyFileSync } = await import('node:fs');
+    const { execSync } = await import('node:child_process');
+    const serviceSrc = join(process.cwd(), 'lobsterlock.service');
+    const serviceDest = '/etc/systemd/system/lobsterlock.service';
+
+    if (!existsSync(serviceSrc)) {
+      console.error(`Service file not found: ${serviceSrc}`);
+      console.error('Run this command from the lobsterlock project directory.');
+      process.exit(1);
+    }
+
+    // Check if we can write to systemd directory
+    try {
+      copyFileSync(serviceSrc, serviceDest);
+      execSync('systemctl daemon-reload');
+      execSync('systemctl enable lobsterlock');
+      execSync('systemctl start lobsterlock');
+      console.log('LobsterLock service installed and started.');
+      console.log();
+      console.log('  systemctl status lobsterlock   # check status');
+      console.log('  journalctl -u lobsterlock -f   # follow logs');
+      console.log('  systemctl stop lobsterlock     # stop');
+    } catch {
+      console.log('Could not install automatically (requires root). Run these commands manually:');
+      console.log();
+      console.log(`  sudo cp ${serviceSrc} ${serviceDest}`);
+      console.log('  sudo systemctl daemon-reload');
+      console.log('  sudo systemctl enable lobsterlock');
+      console.log('  sudo systemctl start lobsterlock');
+    }
+  });
+
+program
+  .command('test-kill')
+  .description('Test the kill switch against the live OpenClaw instance')
+  .option('--dry-run', 'Show what would happen without executing')
+  .option('--restore', 'Restore OpenClaw after a test kill')
+  .action(async (opts) => {
+    const { execCommand } = await import('./util/exec.js');
+    const readline = await import('node:readline');
+    const config = loadConfig();
+
+    const ask = (question: string): Promise<string> => {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      return new Promise((resolve) => {
+        rl.question(question, (answer) => {
+          rl.close();
+          resolve(answer.trim().toLowerCase());
+        });
+      });
+    };
+
+    if (opts.restore) {
+      console.log('Restoring OpenClaw...');
+      if (opts.dryRun) {
+        console.log('[DRY RUN] Would run: systemctl start ' + config.openclaw_service);
+        return;
+      }
+      try {
+        const result = await execCommand('systemctl', ['start', config.openclaw_service]);
+        console.log(`systemctl start exited with code ${result.exitCode}`);
+        // Verify
+        const status = await execCommand('systemctl', ['is-active', config.openclaw_service]);
+        console.log(`OpenClaw status: ${status.stdout.trim()}`);
+      } catch (err) {
+        console.error('Failed to restore. Try manually: sudo systemctl start ' + config.openclaw_service);
+      }
+      return;
+    }
+
+    console.log('=== LobsterLock Kill Switch Test ===');
+    console.log();
+    console.log('This will test the two-step kill switch against the LIVE OpenClaw instance.');
+    console.log('Step 1 (soft): ' + config.openclaw_cli + ' security audit --fix');
+    console.log('Step 2 (hard): systemctl stop ' + config.openclaw_service);
+    console.log();
+
+    if (opts.dryRun) {
+      console.log('[DRY RUN] No commands will be executed.');
+      console.log();
+      console.log('Step 1 would run: ' + config.openclaw_cli + ' security audit --fix');
+      console.log('Step 2 would run: systemctl stop ' + config.openclaw_service);
+      console.log('Restore would run: systemctl start ' + config.openclaw_service);
+      return;
+    }
+
+    // Step 1: Soft kill
+    const answer1 = await ask('Run SOFT kill (security audit --fix)? [y/N] ');
+    if (answer1 !== 'y' && answer1 !== 'yes') {
+      console.log('Aborted.');
+      return;
+    }
+
+    console.log('Running soft kill...');
+    try {
+      const fixResult = await execCommand(config.openclaw_cli, ['security', 'audit', '--fix']);
+      console.log(`Exit code: ${fixResult.exitCode}`);
+      if (fixResult.stdout) console.log('stdout: ' + fixResult.stdout.slice(0, 500));
+      if (fixResult.stderr) console.log('stderr: ' + fixResult.stderr.slice(0, 500));
+    } catch (err) {
+      console.error('Soft kill failed:', err);
+    }
+
+    // Check if OpenClaw is still running
+    try {
+      const status = await execCommand('systemctl', ['is-active', config.openclaw_service]);
+      console.log(`OpenClaw status after soft kill: ${status.stdout.trim()}`);
+    } catch {
+      console.log('Could not check OpenClaw status.');
+    }
+    console.log();
+
+    // Step 2: Hard kill
+    const answer2 = await ask('Run HARD kill (systemctl stop)? This will stop OpenClaw. [y/N] ');
+    if (answer2 !== 'y' && answer2 !== 'yes') {
+      console.log('Skipped hard kill. OpenClaw is still running.');
+      return;
+    }
+
+    console.log('Running hard kill...');
+    try {
+      const stopResult = await execCommand('systemctl', ['stop', config.openclaw_service]);
+      console.log(`Exit code: ${stopResult.exitCode}`);
+    } catch (err) {
+      console.error('Hard kill failed:', err);
+      console.error('Try manually: sudo systemctl stop ' + config.openclaw_service);
+    }
+
+    // Verify
+    try {
+      const status = await execCommand('systemctl', ['is-active', config.openclaw_service]);
+      console.log(`OpenClaw status after hard kill: ${status.stdout.trim()}`);
+    } catch {
+      console.log('OpenClaw appears to be stopped (could not query status).');
+    }
+
+    console.log();
+    console.log('To restore OpenClaw: lobsterlock test-kill --restore');
+  });
+
+program
+  .command('init')
+  .description('Initialize LobsterLock configuration')
+  .action(async () => {
+    const { existsSync, writeFileSync, readFileSync } = await import('node:fs');
+    const readline = await import('node:readline');
+
+    const ask = (question: string, defaultValue = ''): Promise<string> => {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const prompt = defaultValue ? `${question} [${defaultValue}] ` : `${question} `;
+      return new Promise((resolve) => {
+        rl.question(prompt, (answer) => {
+          rl.close();
+          resolve(answer.trim() || defaultValue);
+        });
+      });
+    };
+
+    console.log('=== LobsterLock Setup ===');
+    console.log();
+
+    // 1. Create directory
+    const configDir = resolveConfigPath('~/.lobsterlock');
+    ensureConfigDir();
+    console.log(`Config directory: ${configDir}`);
+
+    // 2. Detect OpenClaw CLI path
+    let defaultCli = '/usr/bin/openclaw';
+    if (existsSync('/opt/openclaw-cli.sh')) {
+      defaultCli = '/opt/openclaw-cli.sh';
+    }
+    if (existsSync('/usr/bin/openclaw')) {
+      defaultCli = '/usr/bin/openclaw';
+    }
+
+    const openclawCli = await ask('OpenClaw CLI path:', defaultCli);
+
+    // 3. Service name
+    const openclawService = await ask('OpenClaw service name:', 'openclaw');
+
+    // 4. Skills watch path - try to auto-detect
+    let defaultSkillsPath = '/home/openclaw/.openclaw/workspace/skills';
+    try {
+      const configPath = '/home/openclaw/.openclaw/openclaw.json';
+      if (existsSync(configPath)) {
+        const raw = readFileSync(configPath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed.agents?.defaults?.sandbox?.docker?.binds) {
+          // Auto-detected from config
+        }
+      }
+    } catch {
+      // Use default
+    }
+
+    const skillsPath = await ask('Skills watch path:', defaultSkillsPath);
+
+    // 5. Discord (optional)
+    console.log();
+    console.log('Discord alerts are optional. Press Enter to skip.');
+    const discordToken = await ask('Discord bot token (optional):');
+    const discordChannel = discordToken ? await ask('Discord channel ID:') : '';
+
+    // 6. Write config.json
+    const configPath = join(configDir, 'config.json');
+    if (existsSync(configPath)) {
+      const overwrite = await ask('config.json already exists. Overwrite? [y/N]');
+      if (overwrite !== 'y' && overwrite !== 'yes') {
+        console.log('Keeping existing config.json');
+      } else {
+        writeConfig();
+      }
+    } else {
+      writeConfig();
+    }
+
+    function writeConfig() {
+      const config: Record<string, unknown> = {
+        openclaw_cli: openclawCli,
+        openclaw_service: openclawService,
+        skills_watch: [skillsPath],
+      };
+      if (discordChannel) {
+        config.discord_channel_id = discordChannel;
+      }
+      writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+      console.log(`Wrote ${configPath}`);
+    }
+
+    // 7. Write .env if it doesn't exist
+    const envPath = join(configDir, '.env');
+    if (!existsSync(envPath)) {
+      let envContent = 'ANTHROPIC_API_KEY=\n';
+      if (discordToken) {
+        envContent += `DISCORD_BOT_TOKEN=${discordToken}\n`;
+      }
+      writeFileSync(envPath, envContent, { mode: 0o600 });
+      console.log(`Wrote ${envPath} (mode 600)`);
+      console.log();
+      console.log('IMPORTANT: Edit ~/.lobsterlock/.env and add your Anthropic API key.');
+    } else {
+      console.log(`.env already exists at ${envPath}`);
+    }
+
+    // 8. Validate paths
+    console.log();
+    console.log('Validating...');
+
+    if (existsSync(openclawCli)) {
+      console.log(`  [ok] OpenClaw CLI found: ${openclawCli}`);
+    } else {
+      console.log(`  [!!] OpenClaw CLI not found: ${openclawCli}`);
+    }
+
+    if (existsSync(skillsPath)) {
+      console.log(`  [ok] Skills directory found: ${skillsPath}`);
+    } else {
+      console.log(`  [!!] Skills directory not found: ${skillsPath}`);
+    }
+
+    // 9. Connectivity tests
+    const openclawConfig = '/home/openclaw/.openclaw/openclaw.json';
+    if (existsSync(openclawConfig)) {
+      console.log(`  [ok] OpenClaw config readable: ${openclawConfig}`);
+    } else {
+      console.log(`  [!!] Cannot read OpenClaw config: ${openclawConfig}`);
+      console.log('       (Add this user to the openclaw group for read access)');
+    }
+
+    try {
+      const { execSync } = await import('node:child_process');
+      execSync('journalctl -u openclaw -n 1 --no-pager 2>/dev/null', { stdio: 'pipe' });
+      console.log('  [ok] Can read OpenClaw journal logs');
+    } catch {
+      console.log('  [!!] Cannot read OpenClaw journal logs');
+      console.log('       (Add this user to the systemd-journal group)');
+    }
+
+    // 10. Summary
+    console.log();
+    console.log('=== Setup Complete ===');
+    console.log();
+    console.log('Next steps:');
+    console.log('  1. Add your Anthropic API key to ~/.lobsterlock/.env');
+    console.log('  2. Run: lobsterlock check    (one-shot security scan)');
+    console.log('  3. Run: lobsterlock start    (start monitoring daemon)');
+    console.log();
+    console.log('For production, install as a systemd service:');
+    console.log('  lobsterlock install-service');
+  });
+
 program.parse();

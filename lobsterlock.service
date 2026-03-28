@@ -1,0 +1,31 @@
+[Unit]
+Description=LobsterLock Security Monitor for OpenClaw
+After=network-online.target openclaw.service
+Wants=network-online.target openclaw.service
+
+[Service]
+Type=simple
+User=lobsterlock
+Group=lobsterlock
+WorkingDirectory=/home/lobsterlock/lobsterlock
+EnvironmentFile=/home/lobsterlock/.lobsterlock/.env
+Environment="HOME=/home/lobsterlock"
+Environment="NODE_ENV=production"
+Environment="NODE_OPTIONS=--max-old-space-size=256"
+
+ExecStart=/usr/bin/node dist/index.js start
+
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lobsterlock
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/home/lobsterlock/.lobsterlock
+ReadOnlyPaths=/home/openclaw/.openclaw
+
+[Install]
+WantedBy=multi-user.target
